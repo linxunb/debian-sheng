@@ -287,6 +287,7 @@ jobs:
 
           find deb -type d -exec chmod 755 {} \;
           find deb -type f -exec chmod 644 {} \;
+          chmod 755 deb/usr/bin/adsprpcd
           dpkg-deb --build deb
           mv deb.deb fastrpc_1.0.2-1_arm64.deb
           echo "✓ fastrpc packaged"
@@ -359,6 +360,7 @@ jobs:
 
           find deb -type d -exec chmod 755 {} \;
           find deb -type f -exec chmod 644 {} \;
+          chmod 755 deb/usr/bin/ssccli
           dpkg-deb --build deb
           mv deb.deb libssc_0.3.0-1_arm64.deb
           echo "✓ libssc packaged"
@@ -440,6 +442,8 @@ jobs:
 
           find deb -type d -exec chmod 755 {} \;
           find deb -type f -exec chmod 644 {} \;
+          chmod 755 deb/usr/bin/monitor-sensor
+          chmod 755 deb/usr/libexec/iio-sensor-proxy
           dpkg-deb --build deb
           mv deb.deb iio-sensor-proxy_99993.9-6_arm64.deb
           echo "✓ iio-sensor-proxy packaged"
@@ -487,6 +491,26 @@ jobs:
 
           find deb -type d -exec chmod 755 {} \;
           find deb -type f -exec chmod 644 {} \;
+
+          cat > deb/DEBIAN/postinst << 'EOF'
+          #!/bin/sh
+          set -e
+          if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload || true
+            if [ -e /sys/devices/virtual/misc/fastrpc-adsp ]; then
+              udevadm trigger /sys/devices/virtual/misc/fastrpc-adsp || true
+            fi
+          fi
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload || true
+            if [ -d /run/systemd/system ]; then
+              systemctl try-restart iio-sensor-proxy.service || true
+            fi
+          fi
+          exit 0
+          EOF
+          chmod 755 deb/DEBIAN/postinst
+
           dpkg-deb --build deb
           mv deb.deb sheng-sensors_20240917-1_arm64.deb
           echo "✓ sheng-sensors packaged"
@@ -836,6 +860,18 @@ jobs:
           else
             echo "  /usr/bin/monitor-sensor not found, skipped"
           fi
+
+          if [ -f "$ROOTFS_MOUNT/usr/bin/ssccli" ]; then
+            sudo chmod +x "$ROOTFS_MOUNT/usr/bin/ssccli"
+            echo "✓ ssccli permissions fixed"
+          else
+            echo "  /usr/bin/ssccli not found, skipped"
+          fi
+
+      - name: "Enable Sensor Services"
+        run: |
+          sudo chroot "$ROOTFS_MOUNT" systemctl enable adsprpcd-sensorspd.service
+          echo "✓ Sensor services enabled"
 
       - name: "Set Hostname"
         run: |
