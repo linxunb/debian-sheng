@@ -888,6 +888,8 @@ jobs:
             wpasupplicant dbus \
             ca-certificates \
             chrony \
+            iw \
+            wireless-regdb \
             net-tools \
             libglib2.0-0 \
             libprotobuf-c1 \
@@ -897,6 +899,11 @@ jobs:
             libgudev-1.0-0 \
             libpolkit-gobject-1-0
           echo "✓ Base packages installed"
+
+      - name: "Use Upstream Regulatory Database"
+        run: |
+          sudo chroot "$ROOTFS_MOUNT" update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream
+          echo "✓ Upstream regulatory database selected"
 
       - name: "Install Plymouth"
         if: ${{ steps.partition.outputs.quiet_boot_enabled == 'true' }}
