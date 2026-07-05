@@ -94,7 +94,7 @@ on:
         description: 'Kernel Branch (required when kernel_source=custom_build)'
         type: string
         required: false
-        default: 'sheng-7.1.2'
+        default: 'sheng-7.1.3'
 
       kernel_config:
         description: 'Kernel Config (required when kernel_source=custom_build)'
