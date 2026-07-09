@@ -1167,3 +1167,92 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
           compression-level: 1
+           # ==========================================================================
+  # Create GitHub Release
+  # ==========================================================================
+  create-release:
+    name: "Create GitHub Release"
+    runs-on: ubuntu-24.04-arm
+    needs: [build-rootfs]
+    if: ${{ inputs.create_release }}
+    steps:
+      - name: "Checkout Repo"
+        uses: actions/checkout@v7
+
+      - name: "Download All Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: "Prepare Release Assets"
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          cd release
+          # GitHub Release single file limit is 2GB (2147483648 bytes)
+          MAX_SIZE=2147483648
+          for f in *.img; do
+            if [ ! -f "$f" ]; then
+              continue
+            fi
+            SIZE=$(stat -c%s "$f")
+            if [ "$SIZE" -le "$MAX_SIZE" ]; then
+              echo "$f is $SIZE bytes, within 2GB limit"
+              continue
+            fi
+            echo "$f is $SIZE bytes, exceeds 2GB limit"
+            # Try xz compression (better ratio than gzip)
+            echo "Compressing with xz..."
+            xz -f -9 -T0 "$f"
+            if [ -f "$f.xz" ]; then
+              XZ_SIZE=$(stat -c%s "$f.xz")
+              echo "Compressed to $f.xz ($XZ_SIZE bytes)"
+              if [ "$XZ_SIZE" -le "$MAX_SIZE" ]; then
+                echo "Within limit after xz compression"
+                continue
+              fi
+              echo "Still exceeds 2GB after xz, splitting..."
+              split -b 1900M "$f.xz" "$f.xz.part-"
+              rm -f "$f.xz"
+              echo "Split into parts:"
+              ls -lh "$f.xz.part-"*
+            else
+              echo "xz compression failed, splitting raw image..."
+              split -b 1900M "$f" "$f.part-"
+              rm -f "$f"
+              echo "Split into parts:"
+              ls -lh "$f.part-"*
+            fi
+          done
+          echo "Final release assets:"
+          ls -lh
+
+      - name: "Generate Release Tag"
+        id: tag
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            TAG="v$(date +%Y%m%d)-${{ inputs.distro_suite }}-${{ inputs.desktop }}-${{ github.run_number }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG"
+
+      - name: "Create Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Debian Sheng ${{ inputs.distro_suite }} ${{ inputs.desktop }} ${{ steps.tag.outputs.tag }}"
+          body: |
+            Automated build for Xiaomi Pad 6S Pro (Sheng)
+            - Debian Suite: ${{ inputs.distro_suite }}
+            - Desktop: ${{ inputs.desktop }}
+            - Boot Mode: ${{ inputs.boot_mode }}
+            - Kernel Source: ${{ inputs.kernel_source }}
+          files: release/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
