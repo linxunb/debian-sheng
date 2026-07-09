@@ -109,6 +109,17 @@ on:
         required: false
         default: 'master'
 
+      create_release:
+        description: 'Create GitHub Release after build'
+        type: boolean
+        default: true
+
+      release_tag:
+        description: 'Release tag (leave empty for auto-generated tag)'
+        type: string
+        required: false
+        default: ''
+
 # ============================================================================
 # Build Jobs — each produces one .deb, uploaded as an artifact
 # ============================================================================
@@ -1255,4 +1266,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
